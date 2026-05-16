@@ -77,7 +77,7 @@ Provides a safe, read-only interface to the system.
     -   **Worker**: Runs `read_file` -> Returns content.
     -   **Gemini**: "Checks out. But who touched this last? `git blame` please."
     -   **Worker**: Runs `git blame` -> Returns result.
-    -   **Gemini**: "Looks good. Reviewed-by: Gemini <...>"
+    -   **Gemini**: "Sashiko has reviewed this patch and found no issues. It looks great!"
 4.  **Storage**:
     -   Save output to `reviews` table.
     -   Save token usage to `ai_interactions` table.

@@ -42,7 +42,7 @@ pub struct SubsystemPolicy {
     #[serde(default)]
     pub embargo_hours: Option<u32>,
     #[serde(default)]
-    pub send_reviewed_by: bool,
+    pub send_positive_review: bool,
 }
 
 impl EmailPolicyConfig {

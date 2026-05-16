@@ -6,7 +6,7 @@ pub enum Action {
     Send {
         to: Vec<String>,
         cc: Vec<String>,
-        send_reviewed_by: bool,
+        send_positive_review: bool,
     },
 }
 
@@ -90,7 +90,7 @@ impl EmailRouter {
         let mut is_private = false;
         let mut reply_to_author = false;
         let mut cc_individuals = false;
-        let mut send_reviewed_by = false;
+        let mut send_positive_review = false;
         let mut cc = Vec::new();
 
         for p in active_policies {
@@ -106,8 +106,8 @@ impl EmailRouter {
             if p.cc_individuals {
                 cc_individuals = true;
             }
-            if p.send_reviewed_by {
-                send_reviewed_by = true;
+            if p.send_positive_review {
+                send_positive_review = true;
             }
             for cr in &p.cc {
                 cc.push(cr.clone());
@@ -166,7 +166,7 @@ impl EmailRouter {
         Action::Send {
             to: final_to.into_iter().collect(),
             cc: final_cc.into_iter().collect(),
-            send_reviewed_by,
+            send_positive_review,
         }
     }
 

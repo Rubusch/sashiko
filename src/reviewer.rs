@@ -2011,13 +2011,13 @@ impl Reviewer {
         );
 
         if findings_count == 0 {
-            let mut sent_reviewed_by = false;
+            let mut sent_positive_review = false;
             if let EmailAction::Send {
                 to,
                 cc,
-                send_reviewed_by,
+                send_positive_review,
             } = &action
-                && *send_reviewed_by
+                && *send_positive_review
             {
                 let mut body_head = String::new();
                 if let Some(body) = &msg_details.body {
@@ -2092,11 +2092,11 @@ impl Reviewer {
                             &final_body,
                         )
                         .await?;
-                    sent_reviewed_by = true;
+                    sent_positive_review = true;
                 }
             }
 
-            if !sent_reviewed_by {
+            if !sent_positive_review {
                 info!("No issues found for patch {}, skipping email.", patch_id);
                 ctx.db
                     .insert_email_outbox(
