@@ -534,6 +534,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize custom remotes
     let repo_path = std::path::PathBuf::from(&settings.git.repository_path);
+
+    // Prune stale worktrees on startup to prevent "bad object" fetch failures
+    if let Err(e) = sashiko::git_ops::prune_worktrees(&repo_path).await {
+        error!("Failed to prune stale worktrees: {}", e);
+    }
+
     if let Some(custom_remotes) = &settings.git.custom_remotes {
         for remote in custom_remotes {
             info!("Ensuring custom remote {} -> {}", remote.name, remote.url);
