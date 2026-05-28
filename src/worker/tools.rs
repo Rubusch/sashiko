@@ -435,7 +435,7 @@ impl ToolBox {
                 (None, None) => None,
             };
 
-            let max_tokens = if focus.is_some() { 20_000 } else { 10_000 };
+            let max_tokens = 20_000;
             let res = Truncator::truncate_code(&content, focus, max_tokens);
             let truncated = res.content;
             let is_truncated = res.truncated;
@@ -489,7 +489,7 @@ impl ToolBox {
         let slice = &lines[start..end];
         let result = slice.join("\n");
 
-        let res = Truncator::truncate_sequential(&result, 10_000);
+        let res = Truncator::truncate_sequential(&result, 20_000);
         let truncated = res.content;
         let lines_kept = res.lines_kept;
         let is_truncated_content = res.truncated;
@@ -797,7 +797,7 @@ impl ToolBox {
                 (None, None) => None,
             };
 
-            let max_tokens = if focus.is_some() { 20_000 } else { 10_000 };
+            let max_tokens = 20_000;
             let res = Truncator::truncate_code(&content, focus, max_tokens);
             let truncated = res.content;
             let is_truncated = res.truncated;
@@ -862,7 +862,7 @@ impl ToolBox {
             let result = slice.join("\n");
 
             let (truncated, lines_kept, is_truncated_content) = if is_file {
-                let res = Truncator::truncate_sequential(&result, 10_000);
+                let res = Truncator::truncate_sequential(&result, 20_000);
                 (res.content, res.lines_kept, res.truncated)
             } else {
                 let res = Truncator::truncate_diff(&result, 10_000, "Commit");
@@ -907,7 +907,7 @@ impl ToolBox {
 
         let total_lines = content.lines().count();
         let (truncated, is_truncated) = if is_file {
-            let res = Truncator::truncate_code(&content, None, 10_000);
+            let res = Truncator::truncate_code(&content, None, 20_000);
             (res.content, res.truncated)
         } else {
             let res = Truncator::truncate_diff(&content, 10_000, "Commit");
