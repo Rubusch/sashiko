@@ -25,7 +25,7 @@ pub struct ToolBox {
     worktree_path: PathBuf,
     prompts_path: Option<PathBuf>,
     active_patch_files: Vec<String>,
-    cache: std::sync::RwLock<std::collections::HashMap<String, Value>>,
+    pub(crate) cache: std::sync::RwLock<std::collections::HashMap<String, Value>>,
 }
 
 impl ToolBox {
@@ -643,37 +643,55 @@ impl ToolBox {
             return Err(anyhow!("Invalid object name: {}", object));
         }
 
-        let mut cmd = Command::new("git");
-        cmd.current_dir(&self.worktree_path).arg("show");
+        let raw_key = format!("git_show_raw:{}:{}:{:?}", object, suppress_diff, args.get("paths"));
 
-        if suppress_diff {
-            cmd.arg("--no-patch");
-        }
+        let content = {
+            let cached_raw = {
+                let cache = self.cache.read().unwrap();
+                cache.get(&raw_key).cloned()
+            };
 
-        cmd.arg(object);
+            if let Some(Value::String(raw_str)) = cached_raw {
+                raw_str
+            } else {
+                let mut cmd = Command::new("git");
+                cmd.current_dir(&self.worktree_path).arg("show");
 
-        if let Some(paths_val) = args["paths"].as_array() {
-            cmd.arg("--");
-            for p in paths_val {
-                if let Some(p_str) = p.as_str() {
-                    if p_str.starts_with('-') {
-                        return Err(anyhow!("Invalid path parameter: {}", p_str));
-                    }
-                    cmd.arg(p_str);
+                if suppress_diff {
+                    cmd.arg("--no-patch");
                 }
+
+                cmd.arg(object);
+
+                if let Some(paths_val) = args["paths"].as_array() {
+                    cmd.arg("--");
+                    for p in paths_val {
+                        if let Some(p_str) = p.as_str() {
+                            if p_str.starts_with('-') {
+                                return Err(anyhow!("Invalid path parameter: {}", p_str));
+                            }
+                            cmd.arg(p_str);
+                        }
+                    }
+                }
+
+                let output = cmd.output().await?;
+
+                if !output.status.success() {
+                    return Err(anyhow!(
+                        "git show failed: {}",
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    ));
+                }
+
+                let raw_str = String::from_utf8_lossy(&output.stdout).to_string();
+                {
+                    let mut cache = self.cache.write().unwrap();
+                    cache.insert(raw_key, Value::String(raw_str.clone()));
+                }
+                raw_str
             }
-        }
-
-        let output = cmd.output().await?;
-
-        if !output.status.success() {
-            return Err(anyhow!(
-                "git show failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            ));
-        }
-
-        let content = String::from_utf8_lossy(&output.stdout).to_string();
+        };
 
         let is_file = object.contains(':') && !object.starts_with(':');
 

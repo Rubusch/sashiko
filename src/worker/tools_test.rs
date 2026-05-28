@@ -147,6 +147,54 @@ mod tests {
     }
 
     #[test]
+    fn test_git_show_raw_caching() {
+        let (linux_path, _prompts_path) = get_test_paths();
+        let toolbox = ToolBox::new(linux_path, None);
+        let rt = Runtime::new().unwrap();
+
+        // Clear/initialize cache check
+        assert!(toolbox.cache.read().unwrap().is_empty());
+
+        // 1. Read subrange lines 1-5
+        let args1 = json!({
+            "object": "HEAD:README.md",
+            "start_line": 1,
+            "end_line": 5
+        });
+        let result1 = rt.block_on(toolbox.call("git_show", args1)).unwrap();
+        assert_eq!(result1["start_line"].as_u64().unwrap(), 1);
+        assert_eq!(result1["end_line"].as_u64().unwrap(), 5);
+
+        // Verify raw cache was populated
+        let raw_key = "git_show_raw:HEAD:README.md:false:None";
+        {
+            let cache = toolbox.cache.read().unwrap();
+            assert!(cache.contains_key(raw_key), "Raw key should be cached");
+            assert!(cache.get(raw_key).unwrap().as_str().unwrap().contains("Sashiko"));
+        }
+
+        // 2. Read different subrange lines 10-15 of the same file
+        let args2 = json!({
+            "object": "HEAD:README.md",
+            "start_line": 10,
+            "end_line": 15
+        });
+        let result2 = rt.block_on(toolbox.call("git_show", args2)).unwrap();
+        assert_eq!(result2["start_line"].as_u64().unwrap(), 10);
+        assert_eq!(result2["end_line"].as_u64().unwrap(), 15);
+
+        // Verify that no extra git_show raw keys were created
+        {
+            let cache = toolbox.cache.read().unwrap();
+            // There should be exactly 3 keys:
+            // 1. git_show:{"end_line":5,"object":"HEAD:README.md","start_line":1}
+            // 2. git_show_raw:HEAD:README.md:false:None
+            // 3. git_show:{"end_line":15,"object":"HEAD:README.md","start_line":10}
+            assert_eq!(cache.len(), 3);
+        }
+    }
+
+    #[test]
     fn test_git_blame_readme() {
         let (linux_path, _prompts_path) = get_test_paths();
         let toolbox = ToolBox::new(linux_path, None);
