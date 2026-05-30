@@ -294,7 +294,14 @@ impl Reviewer {
             }
 
             if all_success {
-                info!("Embargo released successfully for patchset {}", patchset_id);
+                if let Err(e) = self.db.clear_patchset_embargo(patchset_id).await {
+                    error!(
+                        "Failed to clear embargo for patchset {}: {}",
+                        patchset_id, e
+                    );
+                } else {
+                    info!("Embargo released successfully for patchset {}", patchset_id);
+                }
             }
         }
 

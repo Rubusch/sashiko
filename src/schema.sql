@@ -249,5 +249,6 @@ CREATE INDEX IF NOT EXISTS idx_tool_usages_stats ON tool_usages(provider, model,
 CREATE INDEX IF NOT EXISTS idx_patchsets_date ON patchsets(date DESC);
 CREATE INDEX IF NOT EXISTS idx_reviews_patchset_status ON reviews(patchset_id, status);
 CREATE INDEX IF NOT EXISTS idx_reviews_day ON reviews(strftime('%Y-%m-%d', created_at, 'unixepoch'), status);
+CREATE INDEX IF NOT EXISTS idx_email_outbox_patch_id ON email_outbox(patch_id);
 
 

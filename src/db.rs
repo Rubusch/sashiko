@@ -2305,6 +2305,16 @@ impl Database {
         Ok(())
     }
 
+    pub async fn clear_patchset_embargo(&self, id: i64) -> Result<()> {
+        self.conn
+            .execute(
+                "UPDATE patchsets SET embargo_until = NULL WHERE id = ?",
+                libsql::params![id],
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_patchsets(
         &self,
         limit: usize,
