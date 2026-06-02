@@ -571,8 +571,9 @@ impl Reviewer {
             let mut handles = Vec::new();
             let baseline_ref_str = resolution.as_str();
 
-            // If diffs length is >= 10, try concurrent processing using extra permits
-            if diffs.len() >= 10 && total_valid > 1 {
+            // Try concurrent processing using extra available permits in the semaphore
+            if total_valid > 1 {
+                let worktree_path = worktree.path.clone();
                 while let Ok(permit) = ctx.semaphore.clone().try_acquire_owned() {
                     let queue = valid_jobs_queue.clone();
                     let ctx_clone = ctx.clone();
@@ -581,6 +582,7 @@ impl Reviewer {
                     let baseline_ref_clone = baseline_ref_str.to_string();
                     let baseline_id_clone = baseline_id;
                     let embargo_until_clone = patchset.embargo_until;
+                    let worktree_path_clone = worktree_path.clone();
 
                     let handle = tokio::spawn(async move {
                         let mut failed = 0;
@@ -600,7 +602,7 @@ impl Reviewer {
                                     &input_payload_clone,
                                     job.commit_sha,
                                     prompts_hash_clone.as_deref(),
-                                    None, // Worker creates its OWN worktree!
+                                    Some(&worktree_path_clone), // Reuse the single worktree!
                                     &job.diff,
                                     embargo_until_clone,
                                 )
