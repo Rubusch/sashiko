@@ -13,12 +13,17 @@
 // limitations under the License.
 
 use anyhow::{Result, anyhow};
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
+use tokio::time::timeout;
 use tracing::{debug, info};
+
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct NntpClient {
     stream: BufReader<TcpStream>,
+    timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -34,11 +39,15 @@ impl NntpClient {
     pub async fn connect(host: &str, port: u16) -> Result<Self> {
         let addr = format!("{}:{}", host, port);
         info!("Connecting to NNTP server at {}", addr);
-        let stream = TcpStream::connect(addr).await?;
+        let stream = timeout(DEFAULT_TIMEOUT, TcpStream::connect(addr))
+            .await
+            .map_err(|_| anyhow!("Connection timed out"))??;
         let mut reader = BufReader::new(stream);
 
         let mut buf = Vec::new();
-        reader.read_until(b'\n', &mut buf).await?;
+        timeout(DEFAULT_TIMEOUT, reader.read_until(b'\n', &mut buf))
+            .await
+            .map_err(|_| anyhow!("Timeout reading welcome message"))??;
         let response = String::from_utf8_lossy(&buf).trim().to_string();
 
         if !response.starts_with("200") && !response.starts_with("201") {
@@ -46,19 +55,38 @@ impl NntpClient {
         }
 
         debug!("Connected: {}", response);
-        Ok(Self { stream: reader })
+        Ok(Self {
+            stream: reader,
+            timeout: DEFAULT_TIMEOUT,
+        })
+    }
+
+    async fn read_line_with_timeout(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        timeout(self.timeout, self.stream.read_until(b'\n', buf))
+            .await
+            .map_err(|_| anyhow!("Read timed out"))?
+            .map_err(|e| e.into())
+    }
+
+    async fn write_all_with_timeout(&mut self, bytes: &[u8]) -> Result<()> {
+        timeout(self.timeout, self.stream.write_all(bytes))
+            .await
+            .map_err(|_| anyhow!("Write timed out"))?
+            .map_err(|e| e.into())
     }
 
     async fn send_command(&mut self, command: &str) -> Result<()> {
-        self.stream.write_all(command.as_bytes()).await?;
-        self.stream.write_all(b"\r\n").await?;
-        self.stream.flush().await?;
+        self.write_all_with_timeout(command.as_bytes()).await?;
+        self.write_all_with_timeout(b"\r\n").await?;
+        timeout(self.timeout, self.stream.flush())
+            .await
+            .map_err(|_| anyhow!("Flush timed out"))??;
         Ok(())
     }
 
     async fn read_response(&mut self) -> Result<String> {
         let mut buf = Vec::new();
-        self.stream.read_until(b'\n', &mut buf).await?;
+        self.read_line_with_timeout(&mut buf).await?;
         Ok(String::from_utf8_lossy(&buf).trim().to_string())
     }
 
@@ -73,7 +101,7 @@ impl NntpClient {
         let mut groups = Vec::new();
         loop {
             let mut buf = Vec::new();
-            let n = self.stream.read_until(b'\n', &mut buf).await?;
+            let n = self.read_line_with_timeout(&mut buf).await?;
             if n == 0 {
                 break; // EOF
             }
@@ -129,7 +157,7 @@ impl NntpClient {
         let mut lines = Vec::new();
         loop {
             let mut buf = Vec::new();
-            let n = self.stream.read_until(b'\n', &mut buf).await?;
+            let n = self.read_line_with_timeout(&mut buf).await?;
             if n == 0 {
                 break; // EOF
             }
