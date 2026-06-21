@@ -1,4 +1,6 @@
 // Copyright 2026 The Sashiko Authors
+// Inside your main file context evaluation cycle (e.g., src/main.rs)
+// Inside your main file context evaluation cycle (e.g., src/main.rs)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1172,6 +1174,104 @@ fn identify_subsystems(to: &str, cc: &str) -> Vec<(String, String)> {
     subsystems.sort();
     subsystems.dedup();
     subsystems
+}
+
+// fn prepare_llm_payload(file_path: &str, patch_diff: &str, detected_entities: Vec<String>, config: &Settings) -> String {
+//     let detected_entities: Vec<String> = patch_context.get_entities();
+//     if settings.rag.enabled {
+//         if let Some(subsystem_str) = &settings.rag.subsystem_filter {
+//             if current_file_path.contains(subsystem_str) {
+//
+//                 info!("Sashiko RAG: Querying historical patterns for entities: {:?}", detected_entities);
+//                 match sashiko::rag::query_knowledge_base(&ctx.db.conn, &detected_entities).await {
+//                     Ok(lessons) => {
+//                         if !lessons.is_empty() {
+//                             info!("Sashiko RAG: Injected {} historical lessons into prompt context.", lessons.len());
+//                             for lesson in lessons {
+//                                 prompt_payload.push_str(&format!(
+//                                     "\n[CRITICAL REFERENCE - HISTORICAL BUG CLASS: {}]\n{}\n",
+//                                     lesson.bug_type, lesson.description
+//                                 ));
+//                             }
+//                         }
+//                     }
+//                     Err(e) => {
+//                         error!("Sashiko RAG: Error querying graph tables: {}", e);
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//
+//     format!(
+// r#"<|im_start|>system
+// You are a senior Linux kernel security engineer specializing in the crypto subsystem.
+// Review the following incoming patch code for critical safety violations including:
+// - Use-After-Free (UAF) involving async callbacks or scatterlist allocations.
+// - Locking context mismatches (e.g., calling sleeping operations while holding a spinlock).
+//
+// {}
+// <|im_end|>
+// <|im_start|>user
+// Analyze this patch:
+// ```diff
+// {}
+// ```
+// <|im_end|>
+// <|im_start|>assistant
+// "#, structural_context, patch_diff)
+// }
+fn prepare_llm_payload(file_path: &str, patch_diff: &str, detected_entities: Vec<String>, config: &Settings, conn: &libsql::Connection) -> String {
+    let mut structural_context = String::new();
+
+    if config.rag.enabled {
+        if let Some(subsystem_str) = &config.rag.subsystem_filter {
+            if file_path.contains(subsystem_str) {
+
+                info!("Sashiko RAG: Querying historical patterns for entities: {:?}", detected_entities);
+
+                // Block on the async database task synchronously so this helper function stays clean
+                match tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(
+                        sashiko::rag::query_knowledge_base(conn, &detected_entities)
+                    )
+                }) {
+                    Ok(lessons) => {
+                        if !lessons.is_empty() {
+                            info!("Sashiko RAG: Injected {} historical lessons into prompt context.", lessons.len());
+                            for lesson in lessons {
+                                structural_context.push_str(&format!(
+                                    "\n[CRITICAL REFERENCE - HISTORICAL BUG CLASS: {}]\n{}\n",
+                                    lesson.bug_type, lesson.description
+                                ));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Sashiko RAG: Error querying graph tables: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    format!(
+r#"<|im_start|>system
+You are a senior Linux kernel security engineer specializing in the crypto subsystem.
+Review the following incoming patch code for critical safety violations including:
+- Use-After-Free (UAF) involving async callbacks or scatterlist allocations.
+- Locking context mismatches (e.g., calling sleeping operations while holding a spinlock).
+
+{}
+<|im_end|>
+<|im_start|>user
+Analyze this patch:
+```diff
+{}
+```
+<|im_end|>
+<|im_start|>assistant
+"#, structural_context, patch_diff)
 }
 
 #[cfg(test)]

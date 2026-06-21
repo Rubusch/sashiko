@@ -29,6 +29,7 @@ pub mod patch;
 pub mod patchwork;
 pub mod reviewer;
 pub mod settings;
+pub mod rag;
 pub mod utils;
 pub mod worker;
 

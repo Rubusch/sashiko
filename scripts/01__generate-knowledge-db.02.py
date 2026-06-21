@@ -6,8 +6,12 @@ Searches commits, saves results as TODO
 
 uses tree_sitter for AST parsing (correct?)
 
-
-
+TODO optimize the tree-sitter queries to explicitly track asynchronous crypto callback functions
+TODO args: path to repo
+TODO configuration: error pattern
+TODO configuration: time delta
+TODO configuration: subsystem(s) to search through
+TODO configuration: max number of items
 TODO use a time delta concept, configurable for inputs
 """
 
@@ -21,29 +25,58 @@ import tree_sitter_c as tsc
 C_LANGUAGE = Language(tsc.language())
 parser = Parser(C_LANGUAGE)
 
+#def setup_database(db_path):
+### TODO assure a generic layout, to leave bug types, subsystem, temporal scope as open as possible
+#    conn = sqlite3.connect(db_path)
+#    cursor = conn.cursor()
+#    cursor.executescript('''
+#        CREATE TABLE IF NOT EXISTS entities (
+#            id INTEGER PRIMARY KEY,
+#            name TEXT NOT NULL UNIQUE,
+#            type TEXT NOT NULL
+#        );
+#        CREATE TABLE IF NOT EXISTS bug_patterns (
+#            id INTEGER PRIMARY KEY,
+#            subsystem TEXT NOT NULL,
+#            bug_type TEXT NOT NULL,
+#            description TEXT NOT NULL,
+#            remedy_template TEXT
+#        );
+#        CREATE TABLE IF NOT EXISTS bug_edges (
+#            entity_id INTEGER,
+#            pattern_id INTEGER,
+#            FOREIGN KEY(entity_id) REFERENCES entities(id),
+#            FOREIGN KEY(pattern_id) REFERENCES bug_patterns(id),
+#            UNIQUE(entity_id, pattern_id)
+#        );
+#    ''')
+#    conn.commit()
+#    return conn
+# Inside your python pipeline: generate-db.py
+
 def setup_database(db_path):
-## TODO assure a generic layout, to leave bug types, subsystem, temporal scope as open as possible
+    # Point directly to your active local sashiko.db file path
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.executescript('''
-        CREATE TABLE IF NOT EXISTS entities (
-            id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS rag_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
             type TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS bug_patterns (
-            id INTEGER PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS rag_bug_patterns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             subsystem TEXT NOT NULL,
             bug_type TEXT NOT NULL,
             description TEXT NOT NULL,
             remedy_template TEXT
         );
-        CREATE TABLE IF NOT EXISTS bug_edges (
+        CREATE TABLE IF NOT EXISTS rag_bug_edges (
             entity_id INTEGER,
             pattern_id INTEGER,
-            FOREIGN KEY(entity_id) REFERENCES entities(id),
-            FOREIGN KEY(pattern_id) REFERENCES bug_patterns(id),
-            UNIQUE(entity_id, pattern_id)
+            FOREIGN KEY(entity_id) REFERENCES rag_entities(id),
+            FOREIGN KEY(pattern_id) REFERENCES rag_bug_patterns(id),
+            PRIMARY KEY(entity_id, pattern_id)
         );
     ''')
     conn.commit()

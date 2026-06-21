@@ -251,4 +251,27 @@ CREATE INDEX IF NOT EXISTS idx_reviews_patchset_status ON reviews(patchset_id, s
 CREATE INDEX IF NOT EXISTS idx_reviews_day ON reviews(strftime('%Y-%m-%d', created_at, 'unixepoch'), status);
 CREATE INDEX IF NOT EXISTS idx_email_outbox_patch_id ON email_outbox(patch_id);
 
+CREATE TABLE IF NOT EXISTS rag_entities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL
+);
 
+CREATE TABLE IF NOT EXISTS rag_bug_patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subsystem TEXT NOT NULL,
+    bug_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    remedy_template TEXT
+);
+
+CREATE TABLE IF NOT EXISTS rag_bug_edges (
+    entity_id INTEGER,
+    pattern_id INTEGER,
+    FOREIGN KEY(entity_id) REFERENCES rag_entities(id),
+    FOREIGN KEY(pattern_id) REFERENCES rag_bug_patterns(id),
+    PRIMARY KEY(entity_id, pattern_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rag_entities_name ON rag_entities(name);
+CREATE INDEX IF NOT EXISTS idx_rag_bug_patterns_subsystem ON rag_bug_patterns(subsystem);

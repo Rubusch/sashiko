@@ -377,6 +377,25 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
+use std::path::PathBuf;
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct RagDatabaseConfig {
+    pub path: PathBuf,
+    pub subsystems: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct RagConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub db_path: Option<PathBuf>, // explicit single db path here for RAG
+    pub subsystem_filter: Option<String>,
+
+    #[serde(default)]
+    pub databases: Vec<RagDatabaseConfig>,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 #[allow(unused)]
 pub struct Settings {
@@ -390,6 +409,9 @@ pub struct Settings {
     pub server: ServerSettings,
     pub git: GitSettings,
     pub review: ReviewSettings,
+
+    #[serde(default)]
+    pub rag: RagConfig,
 }
 
 impl Settings {
