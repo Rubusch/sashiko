@@ -558,6 +558,7 @@ pub async fn ensure_remote(
             .current_dir(repo_path)
             .args(GIT_PROTOCOL_RESTRICTIONS)
             .args(["fetch", "--prune", "--no-tags", name])
+            .kill_on_drop(true)
             .output();
 
         // Dynamically scale timeout: 30 minutes for heavy initial fetches, 5 minutes for routine updates
@@ -594,6 +595,7 @@ pub async fn ensure_remote(
                                 .current_dir(repo_path)
                                 .args(GIT_PROTOCOL_RESTRICTIONS)
                                 .args(["fetch", "--prune", "--no-tags", name])
+                                .kill_on_drop(true)
                                 .output();
 
                             if let Ok(Ok(retry_fetch)) =
@@ -619,7 +621,11 @@ pub async fn ensure_remote(
                 error_msg = format!("Failed to execute git fetch for {}: {}", name, e);
             }
             Err(_) => {
-                error_msg = format!("Git fetch for {} timed out after 60 seconds", name);
+                error_msg = format!(
+                    "Git fetch for {} timed out after {} seconds",
+                    name,
+                    timeout_duration.as_secs()
+                );
             }
         }
 
