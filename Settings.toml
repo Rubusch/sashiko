@@ -83,6 +83,12 @@ temperature = 1.0
 # max_input_tokens = 200000
 # max_interactions = 150
 
+# To use OpenRouter, also export OPENAI_API_KEY with the API key in the environment
+# provider = "openai-compatible"
+# model = "openrouter/free"
+# max_input_tokens = 128000
+# max_interactions = 100
+
 [ai.claude]
 prompt_caching = true
 # thinking = "enabled"    # Enable extended thinking (or "adaptive" for Sonnet 4.6+)
@@ -90,6 +96,9 @@ prompt_caching = true
 
 # [ai.claude_cli]
 # effort = "high"   # Thinking effort: "low", "medium", "high", "xhigh", "max"
+
+# [ai.openai_compat]        # Enable openrouter url
+# base_url = "https://openrouter.ai/api/v1"
 
 # [ai.vertex]
 # project_id = "my-gcp-project"  # Or set ANTHROPIC_VERTEX_PROJECT_ID env var
