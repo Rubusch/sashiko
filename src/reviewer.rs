@@ -1702,13 +1702,54 @@ async fn run_review_tool(
                                         let llm_semaphore_clone = llm_semaphore.clone();
 
                                         let handle = tokio::spawn(async move {
-                                            let req: AiRequest = match serde_json::from_value(payload) {
+                                            let mut req: AiRequest = match serde_json::from_value(payload) {
                                                 Ok(r) => r,
                                                 Err(e) => {
                                                     let _ = abort_tx_clone.send(anyhow::anyhow!("Failed to parse AiRequest payload: {}", e)).await;
                                                     return;
                                                 }
                                             };
+
+                                            if settings_clone.rag.enabled {
+                                                let subsystem_focus = settings_clone.rag.subsystem_filter.as_deref().unwrap_or("drivers/crypto/");
+                                                
+                                                // Find the active User message inside the prompt array
+                                                if let Some(user_msg) = req.messages.iter_mut().find(|m| m.role == crate::ai::AiRole::User) {
+                                                    if let Some(ref mut user_prompt) = user_msg.content {
+                                                        
+                                                        // Harvest potential functional hooks from the prompt patch lines
+                                                        let mut detected_symbols = Vec::new();
+                                                        if let Ok(re) = regex::Regex::new(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(") {
+                                                            for line in user_prompt.lines() {
+                                                                for cap in re.captures_iter(line) {
+                                                                    if let Some(mat) = cap.get(1) {
+                                                                        let symbol = mat.as_str().to_string();
+                                                                        // Filter out typical C constructs to isolate true functions
+                                                                        if !vec!["if", "while", "for", "switch", "return", "sizeof"].contains(&symbol.as_str()) {
+                                                                            detected_symbols.push(symbol);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        detected_symbols.sort();
+                                                        detected_symbols.dedup();
+
+                                                        if !detected_symbols.is_empty() {
+                                                            tracing::info!("Sashiko RAG Stream Harvester: Isolated symbols: {:?}", detected_symbols);
+                                                            
+                                                            // Query your Tree-sitter graph tables natively via your db extension methods
+                                                            if let Ok(lessons) = db_clone.query_rag_context(&detected_symbols, subsystem_focus).await {
+                                                                if !lessons.is_empty() {
+                                                                    tracing::info!("Sashiko RAG Stream Harvester: Grounding prompt with {} lessons.", lessons.len());
+                                                                    // Update prompt contents in place before hitting the AI execution loops
+                                                                    *user_prompt = db_clone.augment_prompt_with_rag(user_prompt, &lessons);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
 
                                             let mut tool_calls_map = std::collections::HashMap::new();
                                             for msg in &req.messages {

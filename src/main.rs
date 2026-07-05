@@ -1176,52 +1176,14 @@ fn identify_subsystems(to: &str, cc: &str) -> Vec<(String, String)> {
     subsystems
 }
 
-// fn prepare_llm_payload(file_path: &str, patch_diff: &str, detected_entities: Vec<String>, config: &Settings) -> String {
-//     let detected_entities: Vec<String> = patch_context.get_entities();
-//     if settings.rag.enabled {
-//         if let Some(subsystem_str) = &settings.rag.subsystem_filter {
-//             if current_file_path.contains(subsystem_str) {
-//
-//                 info!("Sashiko RAG: Querying historical patterns for entities: {:?}", detected_entities);
-//                 match sashiko::rag::query_knowledge_base(&ctx.db.conn, &detected_entities).await {
-//                     Ok(lessons) => {
-//                         if !lessons.is_empty() {
-//                             info!("Sashiko RAG: Injected {} historical lessons into prompt context.", lessons.len());
-//                             for lesson in lessons {
-//                                 prompt_payload.push_str(&format!(
-//                                     "\n[CRITICAL REFERENCE - HISTORICAL BUG CLASS: {}]\n{}\n",
-//                                     lesson.bug_type, lesson.description
-//                                 ));
-//                             }
-//                         }
-//                     }
-//                     Err(e) => {
-//                         error!("Sashiko RAG: Error querying graph tables: {}", e);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//
-//     format!(
-// r#"<|im_start|>system
-// You are a senior Linux kernel security engineer specializing in the crypto subsystem.
-// Review the following incoming patch code for critical safety violations including:
-// - Use-After-Free (UAF) involving async callbacks or scatterlist allocations.
-// - Locking context mismatches (e.g., calling sleeping operations while holding a spinlock).
-//
-// {}
-// <|im_end|>
-// <|im_start|>user
-// Analyze this patch:
-// ```diff
-// {}
-// ```
-// <|im_end|>
-// <|im_start|>assistant
-// "#, structural_context, patch_diff)
-// }
-fn prepare_llm_payload(file_path: &str, patch_diff: &str, detected_entities: Vec<String>, config: &Settings, conn: &libsql::Connection) -> String {
+#[allow(dead_code)]
+fn prepare_llm_payload(
+    file_path: &str, 
+    patch_diff: &str, 
+    detected_entities: Vec<String>, 
+    config: &Settings, 
+    db: &sashiko::db::Database // Pass the Database reference instead of raw connection
+) -> String {
     let mut structural_context = String::new();
 
     if config.rag.enabled {
@@ -1230,19 +1192,20 @@ fn prepare_llm_payload(file_path: &str, patch_diff: &str, detected_entities: Vec
 
                 info!("Sashiko RAG: Querying historical patterns for entities: {:?}", detected_entities);
 
-                // Block on the async database task synchronously so this helper function stays clean
+                // Use block_in_place to safely resolve our new database query method
                 match tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(
-                        sashiko::rag::query_knowledge_base(conn, &detected_entities)
+                        db.query_rag_context(&detected_entities, subsystem_str)
                     )
                 }) {
                     Ok(lessons) => {
                         if !lessons.is_empty() {
                             info!("Sashiko RAG: Injected {} historical lessons into prompt context.", lessons.len());
                             for lesson in lessons {
+                                // Maps directly to your RelatedBugContext fields
                                 structural_context.push_str(&format!(
-                                    "\n[CRITICAL REFERENCE - HISTORICAL BUG CLASS: {}]\n{}\n",
-                                    lesson.bug_type, lesson.description
+                                    "\n[CRITICAL REFERENCE - HISTORICAL BUG CLASS: {}]\nContext Description:\n{}\nPatch Fix Reference:\n{}\n",
+                                    lesson.bug_type, lesson.description, lesson.patch_diff
                                 ));
                             }
                         }

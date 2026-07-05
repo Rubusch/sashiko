@@ -389,7 +389,7 @@ pub struct RagDatabaseConfig {
 pub struct RagConfig {
     #[serde(default)]
     pub enabled: bool,
-    pub db_path: Option<PathBuf>, // explicit single db path here for RAG
+    pub db_path: Option<PathBuf>,
     pub subsystem_filter: Option<String>,
 
     #[serde(default)]

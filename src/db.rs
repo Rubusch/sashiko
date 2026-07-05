@@ -159,6 +159,16 @@ pub struct EmailOutboxRow {
     pub created_at: i64,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct RelatedBugContext {
+    pub entity_name: String,
+    pub entity_type: String,
+    pub file_path: String,
+    pub bug_type: String,
+    pub description: String,
+    pub patch_diff: String,
+}
+
 impl Database {
     pub async fn get_oldest_message_timestamp(&self) -> Result<Option<i64>> {
         let mut rows = self
@@ -3660,6 +3670,73 @@ impl Database {
             counts.insert(status_key, count as usize);
         }
         Ok(counts)
+    }
+
+    pub async fn query_rag_context(&self, symbols: &[String], subsystem_filter: &str) -> anyhow::Result<Vec<RelatedBugContext>> {
+        if symbols.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Build dynamically parameterized query bindings safely
+        let placeholders: String = symbols.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
+        let query_str = format!(
+            "SELECT e.name, e.type, e.file_path, p.bug_type, p.description, e.source_code 
+             FROM rag_entities e
+             JOIN rag_bug_edges edge ON e.id = edge.entity_id
+             JOIN rag_bug_patterns p ON edge.pattern_id = p.id
+             WHERE e.name IN ({}) AND e.file_path LIKE ?{} LIMIT 3;",
+            placeholders,
+            symbols.len() + 1
+        );
+
+        let mut params = Vec::new();
+        for sym in symbols {
+            params.push(libsql::Value::from(sym.clone()));
+        }
+        params.push(libsql::Value::from(format!("%{}%", subsystem_filter)));
+
+        let mut rows = self.conn.query(&query_str, params).await?; 
+        let mut contexts = Vec::new();
+
+        while let Some(row) = rows.next().await? {
+            contexts.push(RelatedBugContext {
+                entity_name: row.get::<String>(0)?,
+                entity_type: row.get::<String>(1)?,
+                file_path: row.get::<String>(2).unwrap_or_default(),
+                bug_type: row.get::<String>(3)?,
+                description: row.get::<String>(4)?,
+                patch_diff: row.get::<String>(5).unwrap_or_default(),
+            });
+        }
+
+        Ok(contexts)
+    }
+
+    /// Extends raw prompt text strings with structural grounding data 
+    pub fn augment_prompt_with_rag(&self, original_prompt: &str, contexts: &[RelatedBugContext]) -> String {
+        if contexts.is_empty() {
+            return original_prompt.to_string();
+        }
+
+        let mut context_block = String::from(
+            "\n=== SASHIKO LOCAL KNOWLEDGE GRAPH CONTEXT ===\n\
+             The following historical fixes from this subsystem match the patterns or symbols in this patch. \
+             Use these as grounding examples to flag potential regressions, UAFs, or locking inversions:\n\n"
+        );
+
+        for ctx in contexts {
+            context_block.push_str(&format!(
+                "-[HISTORICAL {} PATTERN IN FUNCTION/STRUCT '{}']-\n\
+                 File Path: {}\n\
+                 Root Cause Details:\n{}\n\
+                 Reference Fix Patch Diff:\n{}\n\
+                 -----------------------------------------\n",
+                ctx.bug_type, ctx.entity_name, ctx.file_path, ctx.description, ctx.patch_diff
+            ));
+        }
+
+        context_block.push_str("=== END OF KNOWLEDGE CONTEXT ===\n\n");
+        format!("{}{}", context_block, original_prompt)
     }
 }
 
